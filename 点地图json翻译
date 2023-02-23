@@ -1,0 +1,87 @@
+from distutils.command.build_scripts import first_line_re
+import json
+import requests
+import random
+from hashlib import md5
+
+#百度翻译申请的id和key
+#https://fanyi-api.baidu.com/doc/21
+appid = '20220607001240851'
+appkey = 'nNZWSPHD9c6zPS8fV5Uy'
+
+#源语言&目标语言
+from_lang = 'zh'    
+to_lang =  'kor'
+
+endpoint = 'http://api.fanyi.baidu.com'
+path = '/api/trans/vip/translate'
+url = endpoint + path
+
+#area变量存放解析后的json文件
+area = json.load(open('/Users/seongbin/Downloads/world-point.json','r',encoding='utf-8'))
+#area_translate变量存放修改后的json结果
+area_translate = area
+
+
+list_original = []      #定义列表用来存放提取出的中文
+list_translate = []     #定义列表用来存翻译后的韩文
+
+num = len(area['features'])     #获取需翻译中文个数
+
+
+#提取json文件中需翻译的内容赋给列表list_original
+for i in range(num):
+    list_original.append(area['features'][i]['properties']['name'])
+
+
+# 因为百度翻译api只支持字符串翻译, 所以将列表转为字符串赋给query变量
+query = ",".join(list_original)
+
+
+# Generate salt and sign
+def make_md5(s, encoding='utf-8'):
+    return md5(s.encode(encoding)).hexdigest()
+
+salt = random.randint(32768, 65536)
+sign = make_md5(appid + query + str(salt) + appkey)
+
+# 构建请求
+headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+payload = {'appid': appid, 'q': query, 'from': from_lang, 'to': to_lang, 'salt': salt, 'sign': sign}
+
+# 发送请求
+r = requests.post(url, params=payload, headers=headers)
+result = r.json()
+
+
+#将翻译后的字符串提取出来, 并split成list
+list_translate = result['trans_result'][0]['dst'].split(',')
+
+
+print('原列表长度: ', len(list_original),'\n翻译列表长度:',len(list_translate))
+if len(list_original) != len(list_translate):
+    print('翻译结果长度跟原长度不匹配!')
+
+
+
+
+#百度翻译API太坑了, 韩文利比里亚和利比亚翻译成了一样的, 导致输入的列表少了一位..   但是试了几个别的api发现更坑..
+#So 在列表115位置手动加一下吧...   
+list_translate.insert(115,'라이베리아')
+
+
+
+
+
+for j in range(num):
+
+    area_translate['features'][j]['properties']['name'] = list_translate[j].strip()
+
+
+
+#将翻译结果写入到json文件
+with open('/Users/seongbin/Downloads/data.json', 'w',encoding='utf-8') as f:
+    json.dump(area_translate, f, ensure_ascii=False,indent = 4)
+    print("写入文件完成...")
+
+
